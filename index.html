@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>guest@tangerang: ~</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-outer-1:#05060a;
+    --bg-outer-2:#0b0d14;
+    --bg-term:#0d0e14;
+    --bg-titlebar:#191b23;
+    --fg:#e4e4e7;
+    --fg-dim:#7d8190;
+    --green:#4ade80;
+    --blue:#60a5fa;
+    --purple:#a78bfa;
+    --red:#f87171;
+    --yellow:#fbbf24;
+    --border:rgba(255,255,255,0.07);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    height:100%;
+    margin:0;
+    background:radial-gradient(ellipse at 50% 0%, var(--bg-outer-2), var(--bg-outer-1) 70%);
+    font-family:'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+    -webkit-font-smoothing:antialiased;
+  }
+  body{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+  }
+  .terminal-window{
+    width:min(920px, 100%);
+    height:min(660px, 90vh);
+    background:var(--bg-term);
+    border-radius:12px;
+    border:1px solid var(--border);
+    box-shadow:0 30px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.02);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    position:relative;
+  }
+  .titlebar{
+    height:38px;
+    flex:0 0 auto;
+    background:var(--bg-titlebar);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    padding:0 14px;
+    gap:10px;
+  }
+  .dots{display:flex;gap:7px;}
+  .dot{width:11px;height:11px;border-radius:50%;}
+  .dot.red{background:#ff5f56;}
+  .dot.yellow{background:#ffbd2e;}
+  .dot.green{background:#27c93f;}
+  .titlebar .title{
+    flex:1;
+    text-align:center;
+    color:var(--fg-dim);
+    font-size:12.5px;
+    letter-spacing:.2px;
+  }
+  .terminal-body{
+    flex:1;
+    padding:18px 20px 14px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    font-size:14px;
+    line-height:1.55;
+    color:var(--fg);
+    scrollbar-width:thin;
+    scrollbar-color:#33364a transparent;
+  }
+  .terminal-body::-webkit-scrollbar{width:8px;}
+  .terminal-body::-webkit-scrollbar-thumb{background:#2a2c3a;border-radius:4px;}
+
+  .banner{
+    margin:0 0 10px 0;
+    color:var(--purple);
+    font-size:11px;
+    line-height:1.2;
+    white-space:pre;
+    overflow-x:auto;
+    opacity:0;
+    animation:fadeIn .6s ease forwards;
+  }
+  @media (min-width:520px){ .banner{ font-size:13px; } }
+  @keyframes fadeIn{ to{opacity:1;} }
+
+  .line{ white-space:pre-wrap; word-break:break-word; }
+  .dim{ color:var(--fg-dim); }
+  .success{ color:var(--green); }
+  .error{ color:var(--red); }
+  .accent{ color:var(--purple); }
+  .warn{ color:var(--yellow); }
+
+  .hist-line{ display:flex; flex-wrap:wrap; gap:0; }
+  .hist-line .typed{ color:var(--fg); margin-left:6px; }
+
+  .prompt-user{ color:var(--green); font-weight:700; }
+  .prompt-host{ color:var(--green); font-weight:700; }
+  .prompt-bracket{ color:var(--fg-dim); }
+  .prompt-tilde{ color:var(--blue); font-weight:700; }
+  .prompt-dollar{ color:var(--fg); }
+
+  .input-line{
+    display:flex;
+    align-items:center;
+    flex-wrap:nowrap;
+    margin-top:2px;
+  }
+  #promptText{ white-space:pre; flex:0 0 auto; }
+  #cmdInput{
+    flex:1;
+    min-width:20px;
+    background:transparent;
+    border:none;
+    outline:none;
+    color:var(--fg);
+    font-family:inherit;
+    font-size:16px;
+    caret-color:var(--green);
+    padding:0 0 0 7px;
+    margin:0;
+  }
+  @media (min-width:520px){ #cmdInput{ font-size:14px; } }
+
+  .filecontent{
+    margin:2px 0 6px 0;
+    color:var(--fg);
+    white-space:pre-wrap;
+  }
+
+  .scanlines{
+    pointer-events:none;
+    position:absolute;
+    inset:0;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.018) 0px,
+      rgba(255,255,255,0.018) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode:overlay;
+  }
+</style>
+</head>
+<body>
+
+  <div class="terminal-window" id="termWindow">
+    <div class="titlebar">
+      <div class="dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="title" id="titleBar">guest@tangerang: ~</div>
+    </div>
+
+    <div class="terminal-body" id="termBody">
+<pre class="banner" id="banner"> /'\_/`\
+/\      \     __     __  __  __     __      ___
+\ \ \__\ \  /'__`\  /\ \/\ \/\ \  /'__`\  /' _ `\
+ \ \ \_/\ \/\ \L\.\_\ \ \_/ \_/ \/\ \L\.\_/\ \/\ \
+  \ \_\\ \_\ \__/.\_\\ \___x___/'\ \__/.\_\ \_\ \_\
+   \/_/ \/_/\/__/\/_/ \/__//__/   \/__/\/_/\/_/\/_/</pre>
+
+      <div id="output"></div>
+
+      <div class="input-line" id="inputLine" style="display:none;">
+        <span id="promptText"><span class="prompt-bracket">[</span><span class="prompt-user" id="pUser">guest</span><span class="prompt-bracket">@</span><span class="prompt-host">tangerang</span><span class="prompt-bracket"> ~]</span><span class="prompt-dollar">$</span></span>
+        <input type="text" id="cmdInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      </div>
+    </div>
+    <div class="scanlines"></div>
+  </div>
+
+<script>
+(function(){
+  const body = document.getElementById('termBody');
+  const output = document.getElementById('output');
+  const inputLine = document.getElementById('inputLine');
+  const input = document.getElementById('cmdInput');
+  const titleBar = document.getElementById('titleBar');
+
+  let currentUser = 'guest';
+  let mode = 'normal'; // 'normal' | 'password'
+  let history = [];
+  let historyIndex = -1;
+
+  const files = {
+    'about.txt':
+`Mawan Agus Nugroho, M.Kom
+Guru Desain Komunikasi Visual (DKV) - SMK Negeri 1 Tangerang
+System Administrator - hosting multi-tenant (Moodle, Laravel) untuk beberapa sekolah
+
+Suka ngoprek server, jatuh cinta sama SELinux enforcing mode,
+dan percaya defense-in-depth itu bukan pilihan, tapi kewajiban.`,
+
+    'skills.txt':
+`Bahasa & Framework : PHP, Laravel 12
+Server             : AlmaLinux / RHEL, Nginx, PHP-FPM, MariaDB
+Security           : SELinux (Type Enforcement), YubiKey, Titan Key, Feitian
+Platform           : Moodle LMS, Android (Kotlin/Java)
+Automation         : Bash scripting, Google Apps Script, Cloudflare Workers`,
+
+    'contact.txt':
+`Instansi : SMK Negeri 1 Tangerang
+Program  : Desain Komunikasi Visual (DKV)
+Minat    : Linux, hardware security key, iPhone, kopi hitam
+Kontak   : silakan hubungi lewat sekolah`
+  };
+
+  const rootList  = ['about.txt', 'skills.txt', 'contact.txt', 'projects/'];
+  const projList  = ['setup_vps.bash', 'setup_tenant.bash', 'mawan-seb/', 'moodle-plugins/', 'ppdb-almalinux10/'];
+  const cmdNames  = ['help','whoami','about','skills','contact','ls','cat','neofetch','history','date','pwd','uname','clear','sudo','su','man','echo','exit','logout'];
+
+  function el(tag, className, html){
+    const d = document.createElement(tag);
+    if(className) d.className = className;
+    if(html !== undefined) d.innerHTML = html;
+    return d;
+  }
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function printRaw(html, cls){
+    output.appendChild(el('div', 'line' + (cls ? ' ' + cls : ''), html));
+    scrollDown();
+  }
+  function printText(text, cls){
+    printRaw(escapeHtml(text), cls);
+  }
+  function scrollDown(){
+    body.scrollTop = body.scrollHeight;
+  }
+  function currentPromptHTML(){
+    return `<span class="prompt-bracket">[</span><span class="prompt-user">${currentUser}</span><span class="prompt-bracket">@</span><span class="prompt-host">tangerang</span><span class="prompt-bracket"> ~]</span><span class="prompt-dollar">$</span>`;
+  }
+  function echoCommand(raw){
+    const line = el('div', 'hist-line');
+    line.innerHTML = currentPromptHTML() + `<span class="typed">${escapeHtml(raw)}</span>`;
+    output.appendChild(line);
+    scrollDown();
+  }
+  function setUser(user){
+    currentUser = user;
+    const liveUserEl = document.getElementById('pUser');
+    if(liveUserEl) liveUserEl.textContent = user;
+    titleBar.textContent = user + '@tangerang: ~';
+  }
+
+  function helpText(){
+    return [
+      'Perintah yang tersedia:',
+      '',
+      '  help        tampilkan bantuan ini',
+      '  whoami      tampilkan user saat ini',
+      '  about       tentang saya',
+      '  skills      kemampuan teknis',
+      '  contact     info kontak',
+      '  ls [dir]    lihat isi direktori',
+      '  cat FILE    tampilkan isi file',
+      '  neofetch    info sistem',
+      '  history     riwayat perintah',
+      '  date        tanggal & waktu saat ini',
+      '  pwd         direktori kerja saat ini',
+      '  clear       bersihkan layar',
+      '  exit        keluar sesi'
+    ].join('\n');
+  }
+
+  function neofetchHTML(){
+    const uptimeH = Math.floor(Math.random()*6)+18;
+    const info = [
+      ['guest@tangerang',''],
+      ['-----------------',''],
+      ['OS', 'AlmaLinux 10 (Purple Lion) x86_64'],
+      ['Host', 'VPS'],
+      ['Kernel', '6.6.0-lve'],
+      ['Uptime', uptimeH + ' hari, 3 jam'],
+      ['Shell', 'bash 5.2'],
+      ['Terminal', 'mawan-term'],
+      ['CPU', 'Virtual CPU @ 2.4GHz (2)'],
+      ['Memory', '812MiB / 2048MiB']
+    ];
+    const logo = [
+      '      /\\',
+      '     /  \\',
+      '    / /\\ \\',
+      '   / ____ \\',
+      '  /_/    \\_\\'
+    ];
+    let rows = '';
+    const maxRows = Math.max(logo.length, info.length);
+    for(let i=0;i<maxRows;i++){
+      const logoPart = (logo[i] || '').padEnd(16, ' ');
+      const infoPart = info[i] ? (info[i][1] ? `<span class="accent">${info[i][0]}:</span> ${info[i][1]}` : `<span class="accent">${info[i][0]}</span>`) : '';
+      rows += `<span class="dim">${escapeHtml(logoPart)}</span>${infoPart}\n`;
+    }
+    return `<pre class="filecontent">${rows}</pre>`;
+  }
+
+  function processCommand(raw){
+    const trimmed = raw.trim();
+    echoCommand(raw);
+    history.push(raw);
+    historyIndex = history.length;
+
+    if(trimmed === ''){ return; }
+
+    const parts = trimmed.split(/\s+/);
+    const cmd = parts[0];
+    const args = parts.slice(1);
+
+    switch(cmd){
+      case 'help':
+        printText(helpText());
+        break;
+
+      case 'whoami':
+        printText(currentUser);
+        break;
+
+      case 'about':
+        printText(files['about.txt']);
+        break;
+
+      case 'skills':
+        printText(files['skills.txt']);
+        break;
+
+      case 'contact':
+        printText(files['contact.txt']);
+        break;
+
+      case 'ls': {
+        const arg = (args[0] || '').replace(/\/$/, '');
+        if(arg === '' ){
+          printText(rootList.join('  '));
+        } else if(arg === 'projects'){
+          printText(projList.join('  '));
+        } else {
+          printText(`ls: cannot access '${args[0]}': No such file or directory`, 'error');
+        }
+        break;
+      }
+
+      case 'cat': {
+        if(!args[0]){
+          printText('cat: missing file operand', 'error');
+        } else if(files[args[0]]){
+          printText(files[args[0]]);
+        } else {
+          printText(`cat: ${args[0]}: No such file or directory`, 'error');
+        }
+        break;
+      }
+
+      case 'neofetch':
+        printRaw(neofetchHTML());
+        break;
+
+      case 'history':
+        printText(history.map((h,i) => `  ${i+1}  ${h}`).join('\n'));
+        break;
+
+      case 'date':
+        printText(new Date().toString());
+        break;
+
+      case 'pwd':
+        printText(currentUser === 'mawan' ? '/home/mawan' : '/home/guest');
+        break;
+
+      case 'uname':
+        printText(args[0] === '-a'
+          ? 'Linux tangerang 6.6.0-lve #1 SMP x86_64 AlmaLinux'
+          : 'Linux');
+        break;
+
+      case 'echo':
+        printText(args.join(' '));
+        break;
+
+      case 'clear':
+        output.innerHTML = '';
+        break;
+
+      case 'man':
+        if(args[0] === 'mawan'){
+          printText('MAWAN(1)\n\nNAME\n       mawan - guru DKV merangkap system administrator\n\nDESCRIPTION\n       Cross-references recommendations dari beberapa AI sebelum\n       mengadopsinya. Tidak percaya diff, hanya percaya output lengkap.');
+        } else {
+          printText(`No manual entry for ${args[0] || ''}`.trim(), 'error');
+        }
+        break;
+
+      case 'sudo':
+        if(currentUser === 'mawan'){
+          printText('(sudah root secara efektif, tidak perlu sudo lagi)', 'dim');
+        } else {
+          printText(`${currentUser} is not in the sudoers file. This incident will be reported.`, 'error');
+        }
+        break;
+
+      case 'su':
+        if(currentUser === 'mawan'){
+          printText('su: sudah login sebagai mawan');
+        } else if(args[0] === 'mawan' || args.length === 0){
+          mode = 'password';
+          input.type = 'password';
+          document.getElementById('promptText').innerHTML = 'Password:';
+        } else {
+          printText(`su: user ${args[0]} does not exist`, 'error');
+        }
+        break;
+
+      case 'exit':
+      case 'logout':
+        if(currentUser === 'mawan'){
+          setUser('guest');
+          printText('logout', 'dim');
+        } else {
+          printText('logout', 'dim');
+          printText('Connection to tangerang closed.', 'dim');
+          input.disabled = true;
+          setTimeout(() => {
+            printText('Connection reopened.', 'dim');
+            input.disabled = false;
+            input.focus();
+          }, 1400);
+        }
+        break;
+
+      default:
+        printText(`bash: ${cmd}: command not found`, 'error');
+    }
+  }
+
+  function submitPassword(){
+    // masked echo of whatever was typed
+    const line = el('div', 'hist-line');
+    line.innerHTML = 'Password:<span class="typed">' + '&bull;'.repeat(input.value.length) + '</span>';
+    output.appendChild(line);
+
+    mode = 'normal';
+    input.type = 'text';
+    document.getElementById('promptText').innerHTML =
+      `<span class="prompt-bracket">[</span><span class="prompt-user" id="pUser">guest</span><span class="prompt-bracket">@</span><span class="prompt-host">tangerang</span><span class="prompt-bracket"> ~]</span><span class="prompt-dollar">$</span>`;
+
+    printText('su: Authentication successful.', 'success');
+    setUser('mawan');
+    printText('Selamat datang kembali, Pak Mawan.', 'dim');
+  }
+
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      if(mode === 'password'){
+        submitPassword();
+      } else {
+        processCommand(input.value);
+      }
+      input.value = '';
+      scrollDown();
+      return;
+    }
+    if(mode === 'password') return;
+
+    if(e.key === 'ArrowUp'){
+      e.preventDefault();
+      if(history.length === 0) return;
+      historyIndex = Math.max(0, historyIndex - 1);
+      input.value = history[historyIndex] || '';
+      setTimeout(() => input.setSelectionRange(input.value.length, input.value.length));
+    } else if(e.key === 'ArrowDown'){
+      e.preventDefault();
+      historyIndex = Math.min(history.length, historyIndex + 1);
+      input.value = history[historyIndex] || '';
+    } else if(e.key === 'Tab'){
+      e.preventDefault();
+      const val = input.value.trim();
+      if(!val) return;
+      const matches = cmdNames.filter(c => c.startsWith(val));
+      if(matches.length === 1){
+        input.value = matches[0] + ' ';
+      } else if(matches.length > 1){
+        echoCommand(input.value);
+        printText(matches.join('   '), 'dim');
+      }
+    }
+  });
+
+  body.addEventListener('click', function(){
+    if(!input.disabled) input.focus();
+  });
+
+  // Boot sequence
+  const bootLines = [
+    { text: 'AlmaLinux 10 (Purple Lion) x86_64', cls: 'dim' },
+    { text: 'Kernel 6.6.0-lve — mawan-term v1.2', cls: 'dim' },
+    { text: 'Last login: ' + new Date().toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' }) + ' from 127.0.0.1', cls: 'dim' },
+    { text: '', cls: '' },
+    { text: "Ketik 'help' untuk melihat daftar perintah.", cls: '' }
+  ];
+
+  let i = 0;
+  function bootStep(){
+    if(i < bootLines.length){
+      printText(bootLines[i].text, bootLines[i].cls);
+      i++;
+      setTimeout(bootStep, 220);
+    } else {
+      inputLine.style.display = 'flex';
+      input.focus();
+    }
+  }
+  setTimeout(bootStep, 400);
+})();
+</script>
+</body>
+</html>
